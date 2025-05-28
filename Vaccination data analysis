@@ -1,0 +1,483 @@
+Name: SRUTHI V. S.
+Course: Data Science	Batch: Weekend Batch
+Mini Project 2
+📄 DS Project Documentation: Vaccination Data Analysis
+________________________________________Project Overview
+This project analyzes global vaccination data to identify trends, assess coverage, and evaluate the effectiveness of vaccination campaigns. It follows a structured data pipeline: data cleaning, transformation, storage in a normalized SQL database, integration with Power BI, and generation of insightful interactive dashboards.
+
+✅ Step-by-Step Progress Review
+🔹 Data Cleaning
+Task	Status	Details
+Handle Missing Data	✅ Done	We discussed and removed or imputed missing values in key columns during the Pandas cleaning steps.
+Normalize Units	✅ Done	Coverage and incidence were checked and retained in consistent formats (e.g., percentages and rates).
+Date Consistency	✅ Done	The year values were extracted, standardized, and used to populate the years dimension table.
+________________________________________
+🔹 SQL Database Setup
+Task	Status	Details
+Create Tables	✅ Done	All required tables (coverage, incidence_rate, reported_cases, vaccine_introduction, vaccine_schedule) were created.
+Normalize Data	✅ Done	Separate dimension tables were created for countries, vaccines, diseases, and years to remove redundancy.
+Data Integrity	✅ Done	Primary keys and foreign keys were implemented to ensure referential integrity across all fact tables.
+________________________________________
+✅ Summary
+Component	Status	Notes
+Data Cleaning	✅ Complete	Handled missing data, normalized units, standardized dates
+SQL Table Creation	✅ Complete	Created and normalized all necessary tables
+Referential Integrity	✅ Complete	Foreign key constraints implemented
+Step 1: # Import Necessary libraries:
+import pandas as pd
+import numpy as np
+from sqlalchemy import create_engine
+
+Step 2: # Load the Excel data sheets
+coverage_df = pd.read_excel('coverage-data.xlsx', sheet_name='Coverage Data')
+incidence_df = pd.read_excel('incidence-rate-data.xlsx', sheet_name='Incident Rate')
+cases_df = pd.read_excel('reported-cases-data.xlsx', sheet_name='Reported Cases')
+intro_df = pd.read_excel('vaccine-introduction-data.xlsx', sheet_name='Vaccine Introduction')
+schedule_df = pd.read_excel('vaccine-schedule-data.xlsx', sheet_name='Vaccine Schedule Date')
+
+!pip install pandas openpyxl sqlalchemy pymysql
+Data Cleaning Process
+Handling Missing Data
+During the initial data exploration in Google Colab, I loaded five Excel tables covering:
+•	Coverage Data
+•	Incidence Rate
+•	Reported Cases
+•	Vaccine Introduction
+•	Vaccine Schedule
+Each dataset was assessed for missing values. Rows with critical nulls (e.g., country code, year, or vaccine name) were dropped. In non-critical fields (like comments or schedule notes), missing values were imputed with placeholders or ignored.
+Step 3: Data Cleaning:
+# Cleaning Data
+# a. Cleaning Coverage Data
+coverage_df.columns = coverage_df.columns.str.strip().str.lower().str.replace(' ', '_')
+coverage_df['coverage'] = pd.to_numeric(coverage_df['coverage'], errors='coerce')
+coverage_df['coverage'] = coverage_df['coverage'].apply(lambda x: x*100 if pd.notnull(x) and x < 1 else x)
+coverage_df['coverage'] = coverage_df['coverage'].clip(upper=100)
+coverage_df['year'] = pd.to_numeric(coverage_df['year'], errors='coerce')
+coverage_df.dropna(subset=['coverage', 'target_number', 'doses'], inplace=True)
+
+# b. Cleaning Incident Rate Data
+incidence_df.columns = incidence_df.columns.str.strip().str.lower().str.replace(' ', '_')
+incidence_df['incidence_rate'] = pd.to_numeric(incidence_df['incidence_rate'], errors='coerce')
+incidence_df['year'] = pd.to_numeric(incidence_df['year'], errors='coerce')
+incidence_df.dropna(subset=['incidence_rate'], inplace=True)
+
+# c. Cleaning Reported Cases Data
+cases_df.columns = cases_df.columns.str.strip().str.lower().str.replace(' ', '_')
+cases_df['cases'] = pd.to_numeric(cases_df['cases'], errors='coerce').fillna(0).astype(int)
+cases_df['year'] = pd.to_numeric(cases_df['year'], errors='coerce')
+
+# d. Cleaning Vaccine Introduction Data
+intro_df.columns = intro_df.columns.str.strip().str.lower().str.replace(' ', '_')
+intro_df.rename(columns={'iso_3_code': 'code'}, inplace=True)
+intro_df['year'] = pd.to_numeric(intro_df['year'], errors='coerce')
+intro_df['intro'] = intro_df['intro'].apply(lambda x: 1 if str(x).lower() == 'yes' else 0)
+
+# e. Cleaning Vaccine Schedule Data
+schedule_df.columns = schedule_df.columns.str.strip().str.lower().str.replace(' ', '_')
+schedule_df.rename(columns={'iso_3_code': 'code'}, inplace=True)
+schedule_df['year'] = pd.to_numeric(schedule_df['year'], errors='coerce')
+
+Normalization and Consistency
+Data was standardized to ensure consistency:
+•	Coverage percentages were validated to be within 0-100.
+•	Date fields were converted to integer years.
+•	Country names and codes were aligned across all tables.
+•	Field names were normalized for SQL compatibility.
+Data Types and Constraints
+•	Proper data types were defined: INTEGER for years, REAL for rates, TEXT for descriptions
+•	Primary and foreign keys enforced relationships
+•	Composite keys were created where needed (e.g., country_id + year + vaccine_id)
+Step 4: # Creating MySQL Compatible Engine
+engine = create_engine('sqlite:///vaccination.db')  # For MySQL, replace with mysql+pymysql://user:pwd@host/db
+
+Step 5: # Writing Cleaned data to SQL
+coverage_df.to_sql('coverage-data', engine, index=False, if_exists='replace')
+incidence_df.to_sql('incidence-rate-data', engine, index=False, if_exists='replace')
+cases_df.to_sql('reported-cases-data', engine, index=False, if_exists='replace')
+intro_df.to_sql('vaccine-introduction-data', engine, index=False, if_exists='replace')
+schedule_df.to_sql('vaccine-schedule-data', engine, index=False, if_exists='replace')
+
+Step 6: # Downloading SQLite DB for Power BI
+from google.colab import files
+files.download('vaccination.db')
+
+# In the above implementation (using SQLite via SQLAlchemy in Colab):
+# i. We cleaned all 5 datasets in Python.
+# ii. We saved them into flat SQL tables
+# However, these are raw tables, not relational or normalized — they are denormalized flat tables with repeated values for countries, vaccines, diseases, etc.
+# Now, we are going to Generate the full normalized SQL schema, then create and populate it using the cleaned data in Colab
+SQL Database Quality
+Structure and Normalization
+A relational SQLite database was created using SQLAlchemy within Colab. The schema was normalized with these key tables:
+•	countries (code, Name)
+•	years
+•	vaccines (code, description)
+•	diseases (code, description)
+•	coverage_data
+•	incidence_rate
+•	reported_cases
+•	vaccine_introduction
+•	vaccine_schedule
+Each fact table used foreign keys to reference dimension tables, ensuring referential integrity and eliminating redundancy.
+from sqlalchemy import create_engine, text
+# 1. Create SQLite database
+engine = create_engine('sqlite:///normalized_vaccination.db')
+conn = engine.connect()
+
+Step 7: 
+# Create Dimension Tables
+# Country table
+conn.execute(text("""
+CREATE TABLE IF NOT EXISTS countries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT UNIQUE,
+    name TEXT,
+    who_region TEXT
+)
+"""))
+
+# Vaccines table
+conn.execute(text("""
+CREATE TABLE IF NOT EXISTS vaccines (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT UNIQUE,
+    description TEXT
+)
+"""))
+
+# Diseases table
+conn.execute(text("""
+CREATE TABLE IF NOT EXISTS diseases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT UNIQUE,
+    description TEXT
+)
+"""))
+
+# Denominators table
+conn.execute(text("""
+CREATE TABLE IF NOT EXISTS years (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    year INTEGER UNIQUE
+)
+"""))
+
+years_df = pd.DataFrame({
+    'year': pd.concat([
+        coverage_df['year'],
+        incidence_df['year'],
+        cases_df['year'],
+        intro_df['year'],
+        schedule_df['year']
+    ]).dropna().unique()
+}).astype(int)
+
+years_df.to_sql('years', conn, if_exists='append', index=False)
+
+Step 8: # Update Facts table
+# Coverage Table
+conn.execute(text("""
+CREATE TABLE IF NOT EXISTS coverage (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    country_id INTEGER,
+    year_id INTEGER,
+    vaccine_id INTEGER,
+    coverage_category TEXT,
+    target_number INTEGER,
+    doses_administered INTEGER,
+    coverage REAL,
+    FOREIGN KEY (country_id) REFERENCES countries(id),
+    FOREIGN KEY (vaccine_id) REFERENCES vaccines(id),
+    FOREIGN KEY (year_id) REFERENCES years(id)
+)
+"""))
+# Incidence Rate Table
+conn.execute(text("""
+CREATE TABLE IF NOT EXISTS incidence_rate (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    country_id INTEGER,
+    year_id INTEGER,
+    disease_id INTEGER,
+    denominator TEXT,
+    incidence_rate REAL,
+    FOREIGN KEY (country_id) REFERENCES countries(id),
+    FOREIGN KEY (disease_id) REFERENCES diseases(id),
+    FOREIGN KEY (year_id) REFERENCES years(id)
+)
+"""))
+# Reported Cases Table
+conn.execute(text("""
+CREATE TABLE IF NOT EXISTS reported_cases (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    country_id INTEGER,
+    year_id INTEGER,
+    disease_id INTEGER,
+    cases INTEGER,
+    FOREIGN KEY (country_id) REFERENCES countries(id),
+    FOREIGN KEY (disease_id) REFERENCES diseases(id),
+    FOREIGN KEY (year_id) REFERENCES years(id)
+)
+"""))
+
+# Vaccine Introduction Table
+conn.execute(text("""
+CREATE TABLE IF NOT EXISTS vaccine_introduction (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    country_id INTEGER,
+    year_id INTEGER,
+    vaccine_name TEXT,
+    introduced INTEGER,
+    FOREIGN KEY (country_id) REFERENCES countries(id),
+    FOREIGN KEY (year_id) REFERENCES years(id)
+)
+"""))
+# Vaccine Schedule Table
+conn.execute(text("""
+CREATE TABLE IF NOT EXISTS vaccine_schedule (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    country_id INTEGER,
+    year_id INTEGER,
+    vaccine_name TEXT,
+    schedule_round TEXT,
+    target_pop TEXT,
+    target_pop_desc TEXT,
+    geo_area TEXT,
+    age_administered TEXT,
+    source_comment TEXT,
+    FOREIGN KEY (country_id) REFERENCES countries(id),
+    FOREIGN KEY (year_id) REFERENCES years(id)
+)
+"""))
+Step 9: # Inserting Cleaned Data into Normalized SQL Table
+# Load Dimension Tables into Pandas for Mapping
+# Load dimensions for ID mapping
+countries_ref = pd.read_sql('SELECT * FROM countries', conn)
+vaccines_ref = pd.read_sql('SELECT * FROM vaccines', conn)
+diseases_ref = pd.read_sql('SELECT * FROM diseases', conn)
+years_ref = pd.read_sql('SELECT * FROM years', conn)
+
+# Insert Data into 'coverage' Table
+# Map IDs for coverage
+coverage_temp = (
+    coverage_df
+    .merge(countries_ref, left_on='code', right_on='code')
+    .merge(vaccines_ref, left_on='antigen', right_on='code')
+    .merge(years_ref, left_on='year', right_on='year')
+)
+coverage_cleaned = coverage_temp[[
+    'id_x', 'id_y', 'id', 'coverage_category', 'target_number', 'doses', 'coverage'
+]]
+coverage_cleaned.columns = [
+    'country_id', 'vaccine_id', 'year_id', 'coverage_category',
+    'target_number', 'doses_administered', 'coverage'
+]
+
+# Insert Data into 'incidence_rate' Table
+# Map IDs for incidence
+incidence_temp = (
+    incidence_df
+    .merge(countries_ref, left_on='code', right_on='code')
+    .merge(diseases_ref, left_on='disease', right_on='code')
+    .merge(years_ref, left_on='year', right_on='year')
+)
+
+incidence_cleaned = incidence_temp[[
+    'id_x', 'id_y', 'id', 'denominator', 'incidence_rate'
+]]
+incidence_cleaned.columns = [
+    'country_id', 'disease_id', 'year_id', 'denominator', 'incidence_rate'
+]
+
+incidence_cleaned.to_sql('incidence_rate', conn, if_exists='append', index=False)
+
+# Insert Data into 'reported_cases' Table
+# Map IDs for cases
+cases_temp = (
+    cases_df
+    .merge(countries_ref, left_on='code', right_on='code')
+    .merge(diseases_ref, left_on='disease', right_on='code')
+    .merge(years_ref, left_on='year', right_on='year')
+)
+
+cases_cleaned = cases_temp[['id_x', 'id_y', 'id', 'cases']]
+cases_cleaned.columns = ['country_id', 'disease_id', 'year_id', 'cases']
+cases_cleaned.to_sql('reported_cases', conn, if_exists='append', index=False)
+
+# Insert Data into 'vaccine_introduction' Table
+# Map IDs for intro
+intro_temp = (
+    intro_df
+    # Change 'ISO_3_Code' to 'code' to match the cleaned DataFrame column name
+    .merge(countries_ref, left_on='code', right_on='code')
+    .merge(years_ref, left_on='year', right_on='year')
+)
+
+intro_cleaned = intro_temp[['id_x', 'id_y', 'description', 'intro']]
+# The column names in intro_temp after merging are now based on the merged dataframes.
+# 'id' comes from countries_ref (country_id), 'id_y' comes from years_ref (year_id)
+# 'description' comes from the original intro_df, and 'intro' comes from the original intro_df.
+# The columns need to be mapped to the correct target table column names.
+intro_cleaned.columns = ['country_id', 'year_id', 'vaccine_name', 'introduced']
+intro_cleaned.to_sql('vaccine_introduction', conn, if_exists='append', index=False)
+
+# Insert Data into 'vaccine_schedule' Table
+# Merge for country and year mapping
+schedule_temp = (
+    schedule_df
+    .merge(countries_ref, left_on='code', right_on='code')
+    .merge(years_ref, left_on='year', right_on='year')
+)
+
+# Select and rename columns
+schedule_cleaned = schedule_temp[[
+    'id_x', 'id_y', 'vaccine_description', 'schedulerounds',
+    'targetpop', 'targetpop_description', 'geoarea',
+    'ageadministered', 'sourcecomment'
+]]
+schedule_cleaned.columns = [
+    'country_id', 'year_id', 'vaccine_name', 'schedule_round',
+    'target_pop', 'target_pop_desc', 'geo_area',
+    'age_administered', 'source_comment'
+]
+
+# Insert into the database
+schedule_cleaned.to_sql('vaccine_schedule', conn, if_exists='append', index=False)
+
+# We now have a fully normalized SQL database with:
+# a. Foreign keys enforcing referential integrity
+# b. Dimension tables (countries, vaccines, diseases, years)
+# c. Populated fact tables ready for Power BI
+
+Next Steps
+Here’s what remains for the full project:
+🔹 Power BI Integration
+•	Connect Power BI to the SQLite DB (or exported .csv or .db file)
+•	Build relationships in Power BI model view
+🔹 Interactive Dashboards
+1.	Create slicers, charts, maps to visualize:
+o	Vaccination coverage
+o	Incidence rates
+
+Check the path and download the db file:
+import os
+os.path.exists("/content/vaccination.db")
+
+from google.colab import files
+files.download("/content/vaccination.db")
+
+#  Connecting to Database
+from sqlalchemy import create_engine, inspect
+import pandas as pd
+engine = create_engine('sqlite:///vaccination.db')
+conn = engine.connect()
+
+# List all tables in the database
+inspector = inspect(engine)
+tables = inspector.get_table_names()
+print("Tables in the database:", tables)
+
+# Preview data from each table
+for table in tables:
+    print(f"\n--- Sample data from table '{table}' ---")
+    query = f'SELECT * FROM "{table}" LIMIT 5;'
+    df_sample = pd.read_sql(query, conn)
+    print(df_sample)
+
+Installed Power BI for Desktop
+To connect SQLite DB, PowerBI doesnot support SQLite3, so download and setup ODBC driver
+Option 1: Use ODBC Driver for SQLite (Recommended)
+🔹 Step 1: Install SQLite ODBC Driver
+1.	Go to: https://www.ch-werner.de/sqliteodbc/
+2.	Scroll to the Windows binaries section.
+3.	Download and install the version that matches your system (likely sqliteodbc_w64.exe for 64-bit).
+________________________________________
+Error: "No usable SQLite3 DLL found", so downloaded .dll file separately and added.
+🔹 Step 2: Configure ODBC DSN (Data Source Name)
+1.	Open ODBC Data Sources (64-bit) from Windows Start Menu.
+2.	Go to the System DSN tab and click Add.
+3.	Choose SQLite3 ODBC Driver and click Finish.
+4.	Give it a Name (e.g., VaccinationDB) and point the Database Name to your .db file.
+
+🔹 Step 3: Connect in Power BI
+1.	In Power BI Desktop, click Get Data > ODBC
+2.	Choose the DSN you just created (VaccinationDB)
+3.	Navigate and select tables → Load
+ 
+
+Loaded all five tables to Power BI. Now Let’s Visualise using Power BI
+Power BI Visualizations
+Clarity and Relevance
+Visuals were developed using Power BI Desktop. The following types were implemented:
+•	Visuals: Country-level vaccination coverage and disease incidence
+•	Trend Lines & Bar Charts: Time trends in vaccine uptake and disease reduction
+•	Scatter Plots: Correlation between vaccination coverage and disease incidence
+•	KPI Cards: Target coverage achievement, coverage percentage changes
+Interactivity
+•	Slicers: Enabled filtering by year, country, disease, antigen, and WHO region
+•	Tooltip customization: Displaying extra context like target population, doses given
+The dashboard is interactive and intuitive.
+________________________________________Insights and Actionability
+Public Health Policy
+•	Countries with high coverage and low disease incidence were identified as success cases.
+Resource Allocation
+•	Slicers help identify years of vaccine introduction timelines
+Disease Prevention
+•	Visual trends show a sharp drop in reported cases after vaccine introduction for diseases like Measles and Hepatitis B.
+•	Incidence vs. coverage scatter plots help identify outliers where high vaccination does not correlate with disease reduction, flagging further investigation.
+________________________________________
+1. Vaccination Coverage Over Time (Line Chart)
+
+
+ 
+2.	Scatter Plot – Correlate vaccination coverage with incidence rate:
+ 
+3.	Count of disease over year
+ 
+
+
+4.	Average Vaccination Coverage by Year
+
+ 
+
+Coverage area is improving over time.
+
+5.	Incident rate by country and count of cases
+ 
+
+
+
+
+6.	Vaccination coverage vs Incident rate
+ 
+7.	Metrics: - KPI Cards
+Created Custom DAX measure
+•	Average Coverage = AVERAGE('coverage-data'[Coverage])
+•	Total Reported Cases = SUM('reported-cases-data'[Cases])
+•	Total Incidence Rate = SUM('incidence-rate'[Incidence rate])
+•	Vaccines Introduced = DISTINCTCOUNT('vaccine-introduction-data'[Description])
+•	Avg Coverage by Antigen = 
+CALCULATE(
+AVERAGE('coverage-data'[Coverage]),
+ALLEXCEPT('coverage-data', 'coverage-data'[Antigen_description], 'coverage-data'[Name])
+)
+
+ 
+Interactive dashboard:
+ 
+________________________________________
+🚀 Challenges and Solutions
+Challenge	Solution
+Missing ODBC driver for SQLite	Installed SQLite ODBC driver manually and configured DSN
+Column name mismatches	Cleaned and renamed columns during preprocessing
+Data format errors in Power BI	Ensured proper typing and relationships in SQL tables
+Scatter plots lacked detail fields	Used slicers and tooltips instead
+DATEADD not working on non-date field	Converted year integers to date-compatible format or adjusted DAX logic
+________________________________________
+Deliverables Summary
+•	Python scripts for loading, cleaning, and transforming Excel datasets in Colab
+•	SQL scripts for creating and populating normalized SQLite database
+•	.db file for use in Power BI
+•	Power BI .pbix file with dashboards and visuals
+•	Documentation covering the full project lifecycle (this document)
+________________________________________
+
