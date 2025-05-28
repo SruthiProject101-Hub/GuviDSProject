@@ -1,6 +1,6 @@
 # GuviDSProject
 This repository includes all Projects completed as part of DS Course
-DS Project Documentation: Analyzing Personal Expenses
+DS Mini Project 1 Documentation: Analyzing Personal Expenses
 # 1. Project Overview
 The Personal Expense Tracker app is designed to analyse and categorize an individual’s spending habits across different categories and payment modes to plan actionable savings. This app connects to an SQLite database (expenses.db) containing historical transaction data and provides various queries to analyze and visualize the data. The app provides insights into the user’s spending behavior, helping to identify areas where they can save or optimize their spending.
 # 2. Libraries Used
