@@ -1,120 +1,43 @@
-
 import streamlit as st
-import joblib
 import numpy as np
+from PIL import Image
+from keras.models import load_model  # ✅ Use standalone keras, not tf.keras
 
-# Load your saved model
-model = joblib.load('random_forest_model.pkl')
+# Load the model once at startup
+@st.cache_resource  # ✅ Good caching decorator for models
+def load_tb_model():
+    model = load_model("vgg16_tb_classifier.h5")  # ✅ Make sure this file exists in your app directory
+    return model
 
-st.title("E-commerce Delivery Time Prediction")
+model = load_tb_model()
 
-# Numeric inputs
-agent_age = st.number_input("Agent Age", min_value=18, max_value=80, step=1)
-agent_rating = st.number_input("Agent Rating (1-5)", min_value=1.0, max_value=5.0, step=0.1)
-store_lat = st.number_input("Store Latitude", format="%.6f")
-store_lon = st.number_input("Store Longitude", format="%.6f")
-drop_lat = st.number_input("Drop Latitude", format="%.6f")
-drop_lon = st.number_input("Drop Longitude", format="%.6f")
-distance_km = st.number_input("Distance (km)", min_value=0.0, step=0.1)
-order_hour = st.number_input("Order Hour (0-23)", min_value=0, max_value=23, step=1)
-order_day = st.number_input("Order Day of Week (0=Monday)", min_value=0, max_value=6, step=1)
-pickup_delay = st.number_input("Pickup Delay (minutes)", min_value=0, step=1)
+# Function to preprocess uploaded image
+def preprocess_image(image: Image.Image) -> np.ndarray:
+    image = image.convert('RGB')  # Ensure 3 color channels
+    image = image.resize((224, 224))  # Resize to model input size
+    image_array = np.array(image) / 255.0  # Normalize pixel values to [0,1]
+    image_array = np.expand_dims(image_array, axis=0)  # Add batch dim
+    return image_array
 
-# Weather options
-weather_options = ['Fog', 'Sandstorms', 'Stormy', 'Sunny', 'Windy']
-weather = st.selectbox("Weather Condition", weather_options)
+# Streamlit UI
+st.title("🩺 Tuberculosis Chest X-ray Classification")
+st.write("Upload a chest X-ray image, and the model will predict if it shows signs of Tuberculosis.")
 
-weather_fog = 1 if weather == 'Fog' else 0
-weather_sandstorms = 1 if weather == 'Sandstorms' else 0
-weather_stormy = 1 if weather == 'Stormy' else 0
-weather_sunny = 1 if weather == 'Sunny' else 0
-weather_windy = 1 if weather == 'Windy' else 0
+uploaded_file = st.file_uploader("📤 Choose an X-ray image...", type=["jpg", "jpeg", "png"])
 
-# Traffic options
-traffic_options = ['Jam', 'Low', 'Medium']
-traffic = st.selectbox("Traffic Condition", traffic_options)
+if uploaded_file is not None:
+    try:
+        image = Image.open(uploaded_file)
+        st.image(image, caption="Uploaded Image", use_column_width=True)
 
-traffic_jam = 1 if traffic == 'Jam' else 0
-traffic_low = 1 if traffic == 'Low' else 0
-traffic_medium = 1 if traffic == 'Medium' else 0
+        # Preprocess image and predict
+        input_array = preprocess_image(image)
+        prediction_prob = model.predict(input_array)[0][0]
 
-# Vehicle options
-vehicle_options = ['scooter', 'van']
-vehicle = st.selectbox("Vehicle Type", vehicle_options)
-
-vehicle_scooter = 1 if vehicle == 'scooter' else 0
-vehicle_van = 1 if vehicle == 'van' else 0
-
-# Area options
-area_options = ['Other', 'Semi-Urban', 'Urban']
-area = st.selectbox("Delivery Area", area_options)
-
-area_other = 1 if area == 'Other' else 0
-area_semiurban = 1 if area == 'Semi-Urban' else 0
-area_urban = 1 if area == 'Urban' else 0
-
-# Category options
-category_options = ['Books', 'Clothing', 'Cosmetics', 'Electronics', 'Grocery', 'Home', 'Jewelry', 'Kitchen', 'Outdoors',
-                    'Pet Supplies', 'Shoes', 'Skincare', 'Snacks', 'Sports', 'Toys']
-category = st.selectbox("Product Category", category_options)
-
-category_books = 1 if category == 'Books' else 0
-category_clothing = 1 if category == 'Clothing' else 0
-category_cosmetics = 1 if category == 'Cosmetics' else 0
-category_electronics = 1 if category == 'Electronics' else 0
-category_grocery = 1 if category == 'Grocery' else 0
-category_home = 1 if category == 'Home' else 0
-category_jewelry = 1 if category == 'Jewelry' else 0
-category_kitchen = 1 if category == 'Kitchen' else 0
-category_outdoors = 1 if category == 'Outdoors' else 0
-category_pet_supplies = 1 if category == 'Pet Supplies' else 0
-category_shoes = 1 if category == 'Shoes' else 0
-category_skincare = 1 if category == 'Skincare' else 0
-category_snacks = 1 if category == 'Snacks' else 0
-category_sports = 1 if category == 'Sports' else 0
-category_toys = 1 if category == 'Toys' else 0
-
-features = np.array([[
-    agent_age,
-    agent_rating,
-    store_lat,
-    store_lon,
-    drop_lat,
-    drop_lon,
-    distance_km,
-    order_hour,
-    order_day,
-    pickup_delay,
-    weather_fog,
-    weather_sandstorms,
-    weather_stormy,
-    weather_sunny,
-    weather_windy,
-    traffic_jam,
-    traffic_low,
-    traffic_medium,
-    vehicle_scooter,
-    vehicle_van,
-    area_other,
-    area_semiurban,
-    area_urban,
-    category_books,
-    category_clothing,
-    category_cosmetics,
-    category_electronics,
-    category_grocery,
-    category_home,
-    category_jewelry,
-    category_kitchen,
-    category_outdoors,
-    category_pet_supplies,
-    category_shoes,
-    category_skincare,
-    category_snacks,
-    category_sports,
-    category_toys
-]])
-
-if st.button("Predict Delivery Time"):
-    prediction = model.predict(features)
-    st.success(f"Predicted Delivery Time: {prediction[0]:.2f} hours")
+        # Classification threshold 0.5
+        if prediction_prob >= 0.5:
+            st.error(f"🛑 Prediction: **Tuberculosis** (Confidence: {prediction_prob:.2f})")
+        else:
+            st.success(f"✅ Prediction: **Normal** (Confidence: {1 - prediction_prob:.2f})")
+    except Exception as e:
+        st.error(f"❌ Error processing the image: {e}")
