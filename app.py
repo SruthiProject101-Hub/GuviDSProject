@@ -1,120 +1,81 @@
-
 import streamlit as st
-import joblib
+from PIL import Image
+import tempfile
+import os
+from ultralytics import YOLO
+import easyocr
+import cv2
 import numpy as np
 
-# Load your saved model
-model = joblib.load('random_forest_model.pkl')
+# ----------------------------
+# Load YOLO model (once)
+# ----------------------------
+@st.cache_resource
+def load_model():
+    return YOLO("best.pt")  # best.pt must be in same folder as app.py
 
-st.title("E-commerce Delivery Time Prediction")
+model = load_model()
 
-# Numeric inputs
-agent_age = st.number_input("Agent Age", min_value=18, max_value=80, step=1)
-agent_rating = st.number_input("Agent Rating (1-5)", min_value=1.0, max_value=5.0, step=0.1)
-store_lat = st.number_input("Store Latitude", format="%.6f")
-store_lon = st.number_input("Store Longitude", format="%.6f")
-drop_lat = st.number_input("Drop Latitude", format="%.6f")
-drop_lon = st.number_input("Drop Longitude", format="%.6f")
-distance_km = st.number_input("Distance (km)", min_value=0.0, step=0.1)
-order_hour = st.number_input("Order Hour (0-23)", min_value=0, max_value=23, step=1)
-order_day = st.number_input("Order Day of Week (0=Monday)", min_value=0, max_value=6, step=1)
-pickup_delay = st.number_input("Pickup Delay (minutes)", min_value=0, step=1)
+# Load OCR reader (once)
+@st.cache_resource
+def load_ocr():
+    return easyocr.Reader(['en'])
 
-# Weather options
-weather_options = ['Fog', 'Sandstorms', 'Stormy', 'Sunny', 'Windy']
-weather = st.selectbox("Weather Condition", weather_options)
+ocr_reader = load_ocr()
 
-weather_fog = 1 if weather == 'Fog' else 0
-weather_sandstorms = 1 if weather == 'Sandstorms' else 0
-weather_stormy = 1 if weather == 'Stormy' else 0
-weather_sunny = 1 if weather == 'Sunny' else 0
-weather_windy = 1 if weather == 'Windy' else 0
+# ----------------------------
+# Streamlit UI
+# ----------------------------
+st.title("Vehicle Number Plate Detection & OCR")
+st.write("Upload an image to detect number plates and extract text.")
 
-# Traffic options
-traffic_options = ['Jam', 'Low', 'Medium']
-traffic = st.selectbox("Traffic Condition", traffic_options)
+uploaded_file = st.file_uploader("Choose an image", type=["jpg", "jpeg", "png", "bmp", "tiff", "webp"])
 
-traffic_jam = 1 if traffic == 'Jam' else 0
-traffic_low = 1 if traffic == 'Low' else 0
-traffic_medium = 1 if traffic == 'Medium' else 0
+if uploaded_file is not None:
+    # Convert uploaded file to OpenCV image
+    image = Image.open(uploaded_file).convert("RGB")
+    image_np = np.array(image)
+    image_bgr = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
 
-# Vehicle options
-vehicle_options = ['scooter', 'van']
-vehicle = st.selectbox("Vehicle Type", vehicle_options)
+    # Save to a temporary file YOLO can read
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_file:
+        cv2.imwrite(temp_file.name, image_bgr)
+        temp_file_path = temp_file.name
 
-vehicle_scooter = 1 if vehicle == 'scooter' else 0
-vehicle_van = 1 if vehicle == 'van' else 0
+    st.image(image, caption="Uploaded Image", use_column_width=True)
 
-# Area options
-area_options = ['Other', 'Semi-Urban', 'Urban']
-area = st.selectbox("Delivery Area", area_options)
+    # ----------------------------
+    # Run YOLO Detection
+    # ----------------------------
+    results = model.predict(source=temp_file_path, conf=0.5, save=False)
 
-area_other = 1 if area == 'Other' else 0
-area_semiurban = 1 if area == 'Semi-Urban' else 0
-area_urban = 1 if area == 'Urban' else 0
+    # Annotated image
+    annotated_img = results[0].plot()
+    annotated_img_pil = Image.fromarray(cv2.cvtColor(annotated_img, cv2.COLOR_BGR2RGB))
+    st.image(annotated_img_pil, caption="Detected Plates", use_column_width=True)
 
-# Category options
-category_options = ['Books', 'Clothing', 'Cosmetics', 'Electronics', 'Grocery', 'Home', 'Jewelry', 'Kitchen', 'Outdoors',
-                    'Pet Supplies', 'Shoes', 'Skincare', 'Snacks', 'Sports', 'Toys']
-category = st.selectbox("Product Category", category_options)
+    # ----------------------------
+    # OCR Extraction
+    # ----------------------------
+    st.subheader("Extracted Number Plate Texts")
+    extracted_texts = []
 
-category_books = 1 if category == 'Books' else 0
-category_clothing = 1 if category == 'Clothing' else 0
-category_cosmetics = 1 if category == 'Cosmetics' else 0
-category_electronics = 1 if category == 'Electronics' else 0
-category_grocery = 1 if category == 'Grocery' else 0
-category_home = 1 if category == 'Home' else 0
-category_jewelry = 1 if category == 'Jewelry' else 0
-category_kitchen = 1 if category == 'Kitchen' else 0
-category_outdoors = 1 if category == 'Outdoors' else 0
-category_pet_supplies = 1 if category == 'Pet Supplies' else 0
-category_shoes = 1 if category == 'Shoes' else 0
-category_skincare = 1 if category == 'Skincare' else 0
-category_snacks = 1 if category == 'Snacks' else 0
-category_sports = 1 if category == 'Sports' else 0
-category_toys = 1 if category == 'Toys' else 0
+    for box in results[0].boxes.xyxy:
+        x1, y1, x2, y2 = map(int, box)
+        plate_crop = image_bgr[y1:y2, x1:x2]
+        if plate_crop.size == 0:
+            continue
 
-features = np.array([[
-    agent_age,
-    agent_rating,
-    store_lat,
-    store_lon,
-    drop_lat,
-    drop_lon,
-    distance_km,
-    order_hour,
-    order_day,
-    pickup_delay,
-    weather_fog,
-    weather_sandstorms,
-    weather_stormy,
-    weather_sunny,
-    weather_windy,
-    traffic_jam,
-    traffic_low,
-    traffic_medium,
-    vehicle_scooter,
-    vehicle_van,
-    area_other,
-    area_semiurban,
-    area_urban,
-    category_books,
-    category_clothing,
-    category_cosmetics,
-    category_electronics,
-    category_grocery,
-    category_home,
-    category_jewelry,
-    category_kitchen,
-    category_outdoors,
-    category_pet_supplies,
-    category_shoes,
-    category_skincare,
-    category_snacks,
-    category_sports,
-    category_toys
-]])
+        plate_crop_rgb = cv2.cvtColor(plate_crop, cv2.COLOR_BGR2RGB)
+        ocr_result = ocr_reader.readtext(plate_crop_rgb)
+        plate_text = " ".join([t[1] for t in ocr_result])
+        extracted_texts.append(plate_text)
 
-if st.button("Predict Delivery Time"):
-    prediction = model.predict(features)
-    st.success(f"Predicted Delivery Time: {prediction[0]:.2f} hours")
+    if extracted_texts:
+        for i, text in enumerate(extracted_texts, start=1):
+            st.write(f"Plate {i}: {text}")
+    else:
+        st.write("No text detected on plates.")
+
+    # Cleanup
+    os.remove(temp_file_path)
